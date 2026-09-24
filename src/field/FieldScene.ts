@@ -8,6 +8,7 @@ import { ITEMS, addItem, countItem, takeItem, type ItemId } from '../data/items'
 import { MAPS, type FieldMapDef, type NpcDef, type ObjDef, type WarpDef } from '../data/maps';
 import { parseRows, walkable, type TileKind } from '../data/terrain';
 import { wait, type Game, type Scene } from '../engine/game';
+import { setHint } from '../engine/hint';
 import type { Tap } from '../engine/input';
 import { findPath, type Pt } from '../engine/path';
 import { VH, VW } from '../engine/screen';
@@ -137,6 +138,7 @@ export class FieldScene implements Scene {
     this.state.time += dt;
     const input = this.game.input;
     const uiBusy = this.ui.update(dt, input);
+    setHint(this.ui.modalHint() ?? (this.busy > 0 ? '' : '点地面走过去，点人物对话，点柜子、罐子调查；「菜单」查看队伍、存档'));
     this.stepWalk(dt);
     if (uiBusy || this.busy > 0 || this.player.walking) return;
     if (this.route.length || this.routeGoal) {

@@ -3,6 +3,7 @@ import { FieldScene } from './field/FieldScene';
 import { Game } from './engine/game';
 import { Input, bindTouchPad } from './engine/input';
 import { Screen, VH, VW } from './engine/screen';
+import { initHint } from './engine/hint';
 import { unlockAudio } from './engine/sfx';
 import { connectCloudSaves } from './engine/storage';
 import { TitleScene } from './scenes/TitleScene';
@@ -14,6 +15,7 @@ const screen = new Screen(canvas);
 const input = new Input(screen);
 input.onUserGesture = unlockAudio;
 bindTouchPad(input, pad);
+initHint(document.getElementById('hint') as HTMLElement);
 
 const touch = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
 document.body.classList.toggle('touch', touch);
@@ -25,17 +27,20 @@ function layout() {
   const portrait = H >= window.innerWidth;
   document.body.classList.toggle('portrait', portrait);
   document.body.classList.toggle('landscape', !portrait);
+  // 提示栏高度（和 style.css 里 #hint 的 height 保持一致）
+  const hintH = touch && portrait ? 56 : 34;
   let cssW: number;
   if (touch && portrait) {
-    const padH = Math.min(260, Math.max(190, H * 0.36));
-    cssW = Math.min(W, ((H - padH) * VW) / VH);
+    const padH = Math.min(260, Math.max(190, H * 0.34));
+    cssW = Math.min(W, ((H - padH - hintH) * VW) / VH);
   } else if (touch) {
-    const fit = (H * VW) / VH;
+    const fit = ((H - hintH) * VW) / VH;
     cssW = Math.min(fit, Math.max(W - 340, W * 0.62));
   } else {
-    cssW = Math.min(W, (H * VW) / VH);
+    cssW = Math.min(W, ((H - hintH) * VW) / VH);
   }
   screen.setCssWidth(Math.floor(cssW));
+  (document.getElementById('hint') as HTMLElement).style.maxWidth = `${Math.floor(cssW)}px`;
 }
 layout();
 window.addEventListener('resize', layout);

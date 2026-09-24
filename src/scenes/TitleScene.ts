@@ -1,12 +1,15 @@
 import { drawBrush } from '../art/brush';
 import { renderFireTexture, renderTitleBackground } from '../art/title';
 import type { Game, Scene } from '../engine/game';
+import { setHint } from '../engine/hint';
 import { VW } from '../engine/screen';
 import { sfx } from '../engine/sfx';
 import { loadSlot } from '../engine/storage';
 import { font } from '../engine/text';
 import { UiLayer } from '../engine/ui';
 import { slotItems } from '../game/saves';
+import { loadRomBytes } from '../rom/romfile';
+import { canUploadRom, pickFile, saveRom, uploadRomForAnalysis } from '../rom/romStore';
 import { newGame, type GameState } from '../game/state';
 
 const ITEMS = ['开始游戏', '继续游戏'];
@@ -34,7 +37,12 @@ export class TitleScene implements Scene {
   update(dt: number) {
     this.t += dt;
     const input = this.game.input;
-    if (this.ui.update(dt, input) || this.busy) return;
+    const uiBusy = this.ui.update(dt, input);
+    setHint(
+      this.ui.modalHint() ?? (this.busy ? '' : '点「开始游戏」开始新游戏，点「继续游戏」读取存档。有原版 ROM 的话点右边导入'),
+      this.ui.busy() || this.busy ? null : { label: '导入 ROM', onClick: () => void this.importRom() },
+    );
+    if (uiBusy || this.busy) return;
     if (input.pressed('up') || input.pressed('down')) {
       this.index = 1 - this.index;
       sfx.cursor();
@@ -68,6 +76,44 @@ export class TitleScene implements Scene {
     const state = slot >= 0 ? loadSlot<GameState>(slot) : null;
     if (state) this.start(state, false);
     else this.busy = false;
+  }
+
+  /** 导入原版 ROM：存到本机，在 claude.ai 里还可以上传一份给 Claude 分析。 */
+  private async importRom() {
+    if (this.busy) return;
+    // 必须在按钮点击里直接弹选文件框，手机浏览器才允许
+    const picking = pickFile('.bin,.md,.gen,.smd,application/octet-stream');
+    this.busy = true;
+    try {
+      const file = await picking;
+      if (!file) return;
+      const { rom, info } = loadRomBytes(new Uint8Array(await file.arrayBuffer()));
+      const stored = await saveRom(rom, file.name);
+      const mb = (info.size / 1024 / 1024).toFixed(2);
+      await this.ui.say(
+        null,
+        `已导入：${file.name}（${mb} MB）\nCRC32 ${info.crc32}${info.wasSmd ? '，已从 SMD 格式转换' : ''}${stored ? '' : '\n这台设备存不下，下次打开要重新导入'}`,
+      );
+      if (!(await canUploadRom())) {
+        await this.ui.say(null, 'ROM 只存在这台设备上。要让 Claude 分析，请在 claude.ai 里打开这个游戏页面再导入一次。');
+        return;
+      }
+      const i = await this.ui.ask(null, '要上传一份给 Claude 分析吗？上传后只有能打开这个游戏页面的人看得到（目前只有你）。', ['上传', '先不用']);
+      if (i !== 0) return;
+      this.ui.toast('正在上传……', 60);
+      try {
+        const id = await uploadRomForAnalysis(rom, info, file.name);
+        this.ui.toast('上传完成', 2);
+        await this.ui.say(null, `上传完成！回到和 Claude 的对话里说一声「ROM 传好了」就行。\n（附件编号 ${id.slice(0, 8)}）`);
+      } catch (e) {
+        this.ui.toast('上传失败', 2);
+        await this.ui.say(null, e instanceof Error ? e.message : '上传失败');
+      }
+    } catch (e) {
+      await this.ui.say(null, e instanceof Error ? e.message : '导入失败');
+    } finally {
+      this.busy = false;
+    }
   }
 
   draw(ctx: CanvasRenderingContext2D) {

@@ -345,6 +345,15 @@ export class UiLayer {
     return this.stack.length > 0;
   }
 
+  /** 最上层弹窗的操作提示（给提示栏用），没有弹窗时返回 null。 */
+  modalHint(): string | null {
+    const top = this.stack[this.stack.length - 1];
+    if (!top) return null;
+    if (top instanceof Menu) return '点选项选择；B 或点菜单外面返回';
+    if (top instanceof Panel) return '点屏幕关闭';
+    return '点屏幕或按 A 继续';
+  }
+
   /** 有弹窗时处理输入并返回 true，场景自己就不要再处理输入了。 */
   update(dt: number, input: Input): boolean {
     if (this.notice) {

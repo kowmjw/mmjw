@@ -7,6 +7,7 @@ import { CLASSES } from '../data/classes';
 import { ITEMS, countItem, type Inventory, type ItemId } from '../data/items';
 import { terrainName } from '../data/terrain';
 import { wait, type Game, type Scene } from '../engine/game';
+import { setHint, type HintButton } from '../engine/hint';
 import type { Input, Tap } from '../engine/input';
 import type { Pt } from '../engine/path';
 import { mulberry32, randomSeed } from '../engine/rng';
@@ -59,6 +60,9 @@ export class BattleScene implements Scene {
   private targetKind: TargetKind = 'attack';
   private pendingItem: ItemId | null = null;
   private danger: { unit: BattleUnit; tiles: Set<number> } | null = null;
+  /** 选中人物后：从能走到的格子出发还能打到的范围（红色） */
+  private attackPreview: Set<number> | null = null;
+  private menuOpen: 'action' | 'battle' | null = null;
   private bossWoken = false;
   private t = 0;
   private tweens: Tween[] = [];
@@ -219,6 +223,7 @@ export class BattleScene implements Scene {
     const input = this.game.input;
     const uiBusy = this.ui.update(dt, input);
     this.followCamera(dt);
+    this.updateHint(uiBusy);
     if (uiBusy) return;
     if (this.mode === 'idle') this.updateIdle(input);
     else if (this.mode === 'move') this.updateMove(input);
@@ -254,10 +259,13 @@ export class BattleScene implements Scene {
     const tap = input.takeTap();
     if (tap) {
       const p = this.tapTile(tap);
-      if (p) {
-        this.cursor = p;
-        this.selectAtCursor();
-      }
+      if (!p) return;
+      this.cursor = p;
+      const u = this.battle.unitAt(p.x, p.y);
+      // 点空地只移动光标（看地形），不弹菜单；结束回合用提示栏的按钮
+      if (u && (u.side === 'enemy' || !u.acted)) this.selectAtCursor();
+      else if (u) this.ui.toast(`${u.name}这回合已经行动过了`);
+      else if (this.danger) this.danger = null;
       return;
     }
     if (input.pressed('ok')) this.selectAtCursor();
@@ -274,6 +282,7 @@ export class BattleScene implements Scene {
       this.sel = u;
       this.origin = { x: u.x, y: u.y };
       this.reach = this.battle.reach(u);
+      this.attackPreview = this.attackArea(u, this.reach);
       this.danger = null;
       this.mode = 'move';
       return;
@@ -284,6 +293,83 @@ export class BattleScene implements Scene {
       return;
     }
     void this.battleMenu();
+  }
+
+  /** 从能走到的格子出发还能打到、但走不到的格子。 */
+  private attackArea(u: BattleUnit, reach: Reach) {
+    const out = new Set<number>();
+    const range = CLASSES[u.cls].range;
+    const w = this.battle.w;
+    for (const o of reach.tiles) {
+      for (let dy = -range.max; dy <= range.max; dy++) {
+        for (let dx = -range.max; dx <= range.max; dx++) {
+          const x = o.x + dx;
+          const y = o.y + dy;
+          if (this.battle.inBounds(x, y) && inRange(range, dx, dy)) out.add(y * w + x);
+        }
+      }
+    }
+    for (const t of reach.tiles) out.delete(t.y * w + t.x);
+    return out;
+  }
+
+  /** 点了红色范围里的敌人：挑一个能打到它的落脚点（少挨反击、地形好、少走路）。 */
+  private approachTile(u: BattleUnit, target: BattleUnit): Pt | null {
+    const reach = this.reach;
+    if (!reach) return null;
+    const range = CLASSES[u.cls].range;
+    let best: { p: Pt; score: number } | null = null;
+    for (const t of reach.tiles) {
+      if (!inRange(range, target.x - t.x, target.y - t.y)) continue;
+      const fc = this.battle.forecast(u, target, t.x, t.y);
+      const terr = this.battle.terrain(t.x, t.y);
+      const cost = reach.nodes.get(t.y * this.battle.w + t.x)?.cost ?? 0;
+      const score = -(fc.counter ? (fc.counter.dmg * fc.counter.hit) / 100 : 0) + (terr?.def ?? 0) * 20 + (terr?.eva ?? 0) * 0.3 - cost * 0.5;
+      if (!best || score > best.score) best = { p: t, score };
+    }
+    return best?.p ?? null;
+  }
+
+  private async moveThenAttack(target: BattleUnit, spot: Pt) {
+    const u = this.sel!;
+    this.mode = 'busy';
+    sfx.ok();
+    const path = this.battle.pathTo(this.reach!, spot.x, spot.y);
+    this.reach = null;
+    this.attackPreview = null;
+    if (path.length > 1) await this.animateMove(u, path);
+    this.battle.move(u, spot.x, spot.y);
+    const targets = this.battle.targetsFrom(u, u.x, u.y);
+    this.beginTargeting('attack', targets);
+    this.targetIdx = Math.max(0, this.targets.indexOf(target));
+    this.cursor = { x: target.x, y: target.y };
+  }
+
+  /** 提示栏：随时告诉玩家下一步该做什么。 */
+  private updateHint(uiBusy: boolean) {
+    let text = '';
+    let button: HintButton | null = null;
+    if (this.menuOpen === 'action') text = '选行动：「攻击」打旁边的敌人，「待机」结束这个人本回合的行动；B 退回重新走';
+    else if (this.menuOpen === 'battle') text = '战斗菜单';
+    else if (uiBusy) text = this.ui.modalHint() ?? '';
+    else if (this.mode === 'idle') {
+      const ready = this.battle.units.filter((u) => u.side === 'player' && u.alive && !u.acted).length;
+      text = this.danger
+        ? `红色是${this.danger.unit.name}下回合能打到的范围，再点它一次关闭`
+        : `我方回合：点头上有黄箭头的人物行动（还剩 ${ready} 人）。点敌人能看它的攻击范围`;
+      button = { label: '结束回合', onClick: () => this.requestEndTurn() };
+    } else if (this.mode === 'move') text = '点蓝格走过去；点红色范围里的敌人会自动走过去打；点人物自己原地行动；B 取消';
+    else if (this.mode === 'target') text = this.targetKind === 'attack' ? '点红框里的敌人看伤害预测，再点一次同一个敌人就出手；B 返回' : '点绿框里的同伴使用；B 返回';
+    else if (this.battle.phase === 'enemy' && this.mode === 'busy') text = '敌军行动中……';
+    setHint(text, button);
+  }
+
+  private requestEndTurn() {
+    if (this.mode !== 'idle' || this.ui.busy()) return;
+    sfx.ok();
+    this.danger = null;
+    this.mode = 'busy';
+    void this.enemyPhase();
   }
 
   /** 敌人下回合能打到的所有格子（点敌人时显示成红色）。 */
@@ -310,6 +396,8 @@ export class BattleScene implements Scene {
       if (p && reach.canStop(p.x, p.y)) {
         this.cursor = p;
         void this.confirmMove();
+      } else if (p && this.tryApproach(p)) {
+        // 已经自动走过去准备攻击
       } else {
         this.cancelMove();
       }
@@ -317,10 +405,19 @@ export class BattleScene implements Scene {
     }
     if (input.pressed('ok')) {
       if (reach.canStop(this.cursor.x, this.cursor.y)) void this.confirmMove();
-      else sfx.cancel();
+      else if (!this.tryApproach(this.cursor)) sfx.cancel();
     } else if (input.pressed('cancel')) {
       this.cancelMove();
     }
+  }
+
+  private tryApproach(p: Pt) {
+    const enemy = this.battle.unitAt(p.x, p.y);
+    if (!enemy || enemy.side !== 'enemy' || !this.sel) return false;
+    const spot = this.approachTile(this.sel, enemy);
+    if (!spot) return false;
+    void this.moveThenAttack(enemy, spot);
+    return true;
   }
 
   private cancelMove() {
@@ -328,6 +425,7 @@ export class BattleScene implements Scene {
     if (this.sel) this.cursor = { x: this.sel.x, y: this.sel.y };
     this.sel = null;
     this.reach = null;
+    this.attackPreview = null;
     this.mode = 'idle';
   }
 
@@ -337,6 +435,7 @@ export class BattleScene implements Scene {
     sfx.ok();
     const path = this.battle.pathTo(this.reach!, this.cursor.x, this.cursor.y);
     this.reach = null;
+    this.attackPreview = null;
     if (path.length > 1) await this.animateMove(u, path);
     this.battle.move(u, this.cursor.x, this.cursor.y);
     await this.actionMenu();
@@ -356,7 +455,9 @@ export class BattleScene implements Scene {
     const sx = u.x * TILE - this.cam.x;
     const sy = u.y * TILE - this.cam.y;
     const x = sx > VW / 2 ? sx - 76 : sx + 22;
+    this.menuOpen = 'action';
     const i = await this.ui.choose(items, { x, y: sy - 20, width: 66 });
+    this.menuOpen = null;
     const choice = i < 0 ? '取消' : items[i].label;
     if (choice === '攻击') return this.beginTargeting('attack', attackTargets);
     if (choice === '治疗') return this.beginTargeting('heal', healTargets);
@@ -380,6 +481,7 @@ export class BattleScene implements Scene {
     this.battle.move(u, this.origin!.x, this.origin!.y);
     this.cursor = { ...this.origin! };
     this.reach = this.battle.reach(u);
+    this.attackPreview = this.attackArea(u, this.reach);
     this.mode = 'move';
   }
 
@@ -444,7 +546,9 @@ export class BattleScene implements Scene {
   }
 
   private async battleMenu() {
+    this.menuOpen = 'battle';
     const i = await this.ui.choose(['结束回合', '胜利条件', `音效：${settings.sound ? '开' : '关'}`, '放弃战斗'], { x: 8, y: 8, width: 92 });
+    this.menuOpen = null;
     if (i === 0) {
       this.mode = 'busy';
       await this.enemyPhase();
@@ -591,6 +695,7 @@ export class BattleScene implements Scene {
     const w = this.battle.w;
     if (this.mode === 'move' && this.reach) {
       for (const t of this.reach.tiles) this.fillTile(ctx, t.y * w + t.x, 'rgba(70,140,255,0.45)');
+      if (this.attackPreview) for (const k of this.attackPreview) this.fillTile(ctx, k, 'rgba(255,80,60,0.3)');
     }
     if (this.danger) for (const k of this.danger.tiles) this.fillTile(ctx, k, 'rgba(255,70,50,0.32)');
     if (this.mode === 'target') {
@@ -598,6 +703,7 @@ export class BattleScene implements Scene {
       for (const t of this.targets) this.fillTile(ctx, t.y * w + t.x, color);
     }
     this.drawUnits(ctx, cx, cy);
+    if (this.mode === 'idle' && !this.ui.busy()) this.drawReadyMarks(ctx, cx, cy);
     if (this.mode === 'idle' || this.mode === 'move' || this.mode === 'target' || this.mode === 'busy') this.drawCursorBox(ctx, cx, cy);
     for (const p of this.popups) {
       const rise = Math.min(1, p.t * 3) * 10;
@@ -639,6 +745,30 @@ export class BattleScene implements Scene {
       const hp = this.hpShown.get(u.uid) ?? u.hp;
       drawBar(ctx, x + 2, y + 15, 12, 2, hp / u.maxHp);
       ctx.globalAlpha = 1;
+    }
+  }
+
+  /** 还能行动的我方人物头上画一个跳动的黄箭头。 */
+  private drawReadyMarks(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
+    const bob = Math.round(Math.sin(this.t * 6) * 1.5);
+    for (const u of this.battle.units) {
+      if (u.side !== 'player' || !u.alive || u.acted) continue;
+      const x = u.x * TILE - cx + 8;
+      const y = u.y * TILE - cy - 6 + bob;
+      ctx.fillStyle = '#1a1206';
+      ctx.beginPath();
+      ctx.moveTo(x - 4, y - 1);
+      ctx.lineTo(x + 4, y - 1);
+      ctx.lineTo(x, y + 4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#ffd83a';
+      ctx.beginPath();
+      ctx.moveTo(x - 3, y - 0.5);
+      ctx.lineTo(x + 3, y - 0.5);
+      ctx.lineTo(x, y + 3);
+      ctx.closePath();
+      ctx.fill();
     }
   }
 

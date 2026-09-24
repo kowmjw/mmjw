@@ -6,6 +6,7 @@
   --key-text: #f6f3ea;
   --accent: #b8382a;
   --accent-down: #8a2418;
+  --hint-text: #2c2824;
   color-scheme: light;
 }
 
@@ -18,6 +19,7 @@
     --key-text: #e8e6f0;
     --accent: #c8483a;
     --accent-down: #e0685a;
+    --hint-text: #e6e2d8;
     color-scheme: dark;
   }
 }
@@ -30,6 +32,7 @@
   --key-text: #e8e6f0;
   --accent: #c8483a;
   --accent-down: #e0685a;
+  --hint-text: #e6e2d8;
   color-scheme: dark;
 }
 
@@ -67,6 +70,48 @@ canvas {
   display: block;
   touch-action: none;
   image-rendering: pixelated;
+}
+
+#hint {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 720px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 2px;
+  color: var(--hint-text);
+  font: 13px/1.35 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+  flex: none;
+}
+
+#hint .hint-text {
+  flex: 1;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+#hint button {
+  flex: none;
+  border: none;
+  border-radius: 16px;
+  padding: 7px 14px;
+  background: var(--accent);
+  color: #fff;
+  font: bold 14px/1 'PingFang SC', 'Noto Sans SC', sans-serif;
+  touch-action: manipulation;
+}
+
+#hint button:active {
+  background: var(--accent-down);
+}
+
+body.touch.portrait #hint {
+  height: 56px;
+  font-size: 15px;
 }
 
 #pad {
