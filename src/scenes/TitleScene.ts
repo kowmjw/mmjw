@@ -31,6 +31,8 @@ export class TitleScene implements Scene {
   constructor(
     private readonly game: Game,
     private readonly start: (state: GameState, fresh: boolean) => void,
+    /** 导入了认得的 ROM 时切到原版模式，返回 false 表示不认得这一版 */
+    private readonly onRom?: (rom: Uint8Array) => boolean,
   ) {
     this.ui = new UiLayer(game.screen.ctx);
   }
@@ -105,6 +107,7 @@ export class TitleScene implements Scene {
         null,
         `已导入：${fileName}（${mb} MB）\nCRC32 ${info.crc32}${info.wasSmd ? '，已从 SMD 格式转换' : ''}${stored ? '' : '\n这台设备存不下，下次打开要重新导入'}`,
       );
+      if (this.onRom?.(rom)) return;
       if (!(await canUploadRom())) {
         await this.ui.say(null, 'ROM 只存在这台设备上。要让 Claude 分析，请在 claude.ai 里打开这个游戏页面再导入一次。');
         return;

@@ -121,3 +121,15 @@ export function romToText(rom: Uint8Array, info: RomInfo, fileName: string, toBa
   const meta = { format: 'shuihu-rom-base64', version: 1, fileName, size: info.size, crc32: info.crc32, wasSmd: info.wasSmd };
   return `${JSON.stringify(meta)}\n${toBase64(rom)}\n`;
 }
+
+/** romToText 的反向：解出 ROM 字节，并核对 CRC32。格式不对或校验失败时抛出中文错误。 */
+export function romFromText(text: string, fromBase64: (s: string) => Uint8Array): { rom: Uint8Array; fileName: string } {
+  const nl = text.indexOf('\n');
+  if (nl < 0) throw new Error('ROM 附件格式不对');
+  const meta = JSON.parse(text.slice(0, nl)) as { format?: string; fileName?: string; crc32?: string; size?: number };
+  if (meta.format !== 'shuihu-rom-base64') throw new Error('ROM 附件格式不对');
+  const rom = fromBase64(text.slice(nl + 1).trim());
+  const crc = crc32(rom).toString(16).toUpperCase().padStart(8, '0');
+  if ((meta.size !== undefined && rom.length !== meta.size) || (meta.crc32 && crc !== meta.crc32)) throw new Error('ROM 附件损坏了（校验不对）');
+  return { rom, fileName: meta.fileName ?? 'rom.bin' };
+}

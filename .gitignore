@@ -11,3 +11,4 @@ shots/
 *.gen
 *.smd
 *.bin
+__pycache__/

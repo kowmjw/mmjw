@@ -1,6 +1,6 @@
 // 导入的 ROM 存在手机/电脑浏览器本地（IndexedDB），不会上传，除非玩家在界面里选择「上传给 Claude 分析」。
 import { claudeRuntime } from '../engine/storage';
-import { loadRomBytes, romToText, type LoadedRom, type RomInfo } from './romfile';
+import { loadRomBytes, romFromText, romToText, type LoadedRom, type RomInfo } from './romfile';
 
 const DB_NAME = 'shuihu-remake';
 const STORE = 'rom';
@@ -64,11 +64,21 @@ function toBase64(bytes: Uint8Array) {
   return btoa(s);
 }
 
+function fromBase64(s: string) {
+  const bin = atob(s);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
 interface AssetsApi {
   upload(blob: Blob, options?: { type?: string }): Promise<{ id: string; sizeBytes: number }>;
 }
 interface DbApi {
-  doc(path: string): { set(data: Record<string, unknown>): Promise<void> };
+  doc(path: string): {
+    set(data: Record<string, unknown>): Promise<void>;
+    get(): Promise<{ exists: boolean; data(): Record<string, unknown> | undefined }>;
+  };
 }
 interface UserApi {
   id(): Promise<string | null>;
@@ -103,4 +113,39 @@ export async function uploadRomForAnalysis(rom: Uint8Array, info: RomInfo, fileN
     // 记录失败不影响上传本身
   }
   return res.id;
+}
+
+/**
+ * 在 claude.ai 里打开时，读存在这个游戏页面里的 ROM 附件：
+ * 先看共享的 config/rom（Claude 放进去的），再看玩家自己上传记录的 data/users/<id>/rom。
+ * 读到后存一份到本机，下次直接用。
+ */
+export async function loadRomFromArtifact(): Promise<(LoadedRom & { fileName: string }) | null> {
+  const runtime = claudeRuntime();
+  if (!runtime) return null;
+  try {
+    const [db, user] = (await Promise.all([runtime.use('db'), runtime.use('user')])) as [DbApi | null, UserApi | null];
+    if (!db) return null;
+    const ids: string[] = [];
+    const shared = await db.doc('config/rom').get();
+    const sharedId = shared.exists ? shared.data()?.assetId : undefined;
+    if (typeof sharedId === 'string') ids.push(sharedId);
+    const uid = user ? await user.id() : null;
+    if (uid) {
+      const own = await db.doc(`data/users/${uid}/rom`).get();
+      const ownId = own.exists ? own.data()?.assetId : undefined;
+      if (typeof ownId === 'string') ids.push(ownId);
+    }
+    for (const id of ids) {
+      const res = await fetch(`/_blob/${id}`);
+      if (!res.ok) continue;
+      const { rom, fileName } = romFromText(await res.text(), fromBase64);
+      const loaded = loadRomBytes(rom);
+      await saveRom(loaded.rom, fileName);
+      return { ...loaded, fileName };
+    }
+  } catch (e) {
+    console.warn('读取 ROM 附件失败', e);
+  }
+  return null;
 }

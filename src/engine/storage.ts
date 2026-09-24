@@ -82,7 +82,7 @@ export async function connectCloudSaves(): Promise<boolean> {
     const [db, user] = (await Promise.all([runtime.use('db'), runtime.use('user')])) as [CloudDb | null, CloudUser | null];
     const uid = db && user ? await user.id() : null;
     if (!db || !uid) return false;
-    const keys = [...Array.from({ length: SLOT_COUNT }, (_, i) => `slot${i}`), 'settings'];
+    const keys = [...Array.from({ length: SLOT_COUNT }, (_, i) => `slot${i}`), ...Array.from({ length: SLOT_COUNT }, (_, i) => `slot${ORIG_SLOT_BASE + i}`), 'settings'];
     const remote = await Promise.all(
       keys.map(async (key) => {
         const snap = await db.doc(`data/users/${uid}/${key}`).get();
@@ -113,6 +113,8 @@ export async function connectCloudSaves(): Promise<boolean> {
 
 export const AUTO_SLOT = 0;
 export const SLOT_COUNT = 4; // 0 = 自动存档，1-3 = 手动存档
+/** 原版模式的存档另外放在 10–13 号，和旧的复刻剧情分开 */
+export const ORIG_SLOT_BASE = 10;
 
 export interface SlotMeta {
   slot: number;
@@ -152,8 +154,8 @@ export function slotMeta(slot: number): SlotMeta | null {
   }
 }
 
-export function hasAnySave() {
-  for (let i = 0; i < SLOT_COUNT; i++) if (slotMeta(i)) return true;
+export function hasAnySave(base = 0) {
+  for (let i = 0; i < SLOT_COUNT; i++) if (slotMeta(base + i)) return true;
   return false;
 }
 

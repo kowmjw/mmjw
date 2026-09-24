@@ -1,0 +1,61 @@
+diff --git a/core/debug/cpuhook.h b/core/debug/cpuhook.h
+index 1fea3ec..a890266 100644
+--- a/core/debug/cpuhook.h
++++ b/core/debug/cpuhook.h
+@@ -80,7 +80,7 @@ typedef enum {
+ 
+ /* CPU hook is called on read, write, and execute.
+  */
+-void (*cpu_hook)(hook_type_t type, int width, unsigned int address, unsigned int value);
++extern void (*cpu_hook)(hook_type_t type, int width, unsigned int address, unsigned int value);
+ 
+ /* Use set_cpu_hook() to assign a callback that can process the data provided
+  * by cpu_hook().
+diff --git a/core/vdp_ctrl.c b/core/vdp_ctrl.c
+index bd454f6..ded0015 100644
+--- a/core/vdp_ctrl.c
++++ b/core/vdp_ctrl.c
+@@ -3082,12 +3082,24 @@ static void vdp_z80_data_w_sg(unsigned int data)
+ /*--------------------------------------------------------------------------*/
+ 
+ /* DMA from 68K bus: $000000-$7FFFFF (external area) */
++
++#ifdef HOOK_CPU
++extern unsigned int trace_dma[4096][5];
++extern unsigned int trace_dma_count;
++extern unsigned int trace_last_pc;
++extern int trace_enabled;
++#define TRACE_DMA(src, len) if (trace_enabled) { unsigned int *e_ = trace_dma[trace_dma_count & 4095]; e_[0] = (src); e_[1] = (len); e_[2] = addr; e_[3] = code; e_[4] = trace_last_pc; trace_dma_count++; }
++#else
++#define TRACE_DMA(src, len)
++#endif
++
+ static void vdp_dma_68k_ext(unsigned int length)
+ {
+   uint16 data;
+ 
+   /* 68k bus source address */
+   uint32 source = (reg[23] << 17) | (dma_src << 1);
++  TRACE_DMA(source, length)
+ 
+   do
+   {
+@@ -3123,6 +3135,7 @@ static void vdp_dma_68k_ram(unsigned int length)
+ 
+   /* 68k bus source address */
+   uint32 source = (reg[23] << 17) | (dma_src << 1);
++  TRACE_DMA(source, length)
+ 
+   do
+   {
+diff --git a/libretro/link.T b/libretro/link.T
+index b0c262d..d99a350 100644
+--- a/libretro/link.T
++++ b/libretro/link.T
+@@ -1,5 +1,4 @@
+ {
+-   global: retro_*;
++   global: retro_*; vram; cram; vsram; work_ram; reg; sat; m68k; bitmap; trace_*;
+    local: *;
+ };
+-
