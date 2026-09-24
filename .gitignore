@@ -6,8 +6,8 @@ test-results/
 shots/
 
 # 原版 ROM 和从中提取的素材只放在本机，绝不提交（本仓库是公开的）
-rom/
-extracted/
+/rom/
+/extracted/
 *.gen
 *.smd
 *.bin
