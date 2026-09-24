@@ -9,6 +9,7 @@ import { font } from '../engine/text';
 import { UiLayer } from '../engine/ui';
 import { slotItems } from '../game/saves';
 import { loadRomBytes } from '../rom/romfile';
+import { archiveKind, extractRomFromZip } from '../rom/unzip';
 import { canUploadRom, pickFile, saveRom, uploadRomForAnalysis } from '../rom/romStore';
 import { newGame, type GameState } from '../game/state';
 
@@ -82,17 +83,27 @@ export class TitleScene implements Scene {
   private async importRom() {
     if (this.busy) return;
     // 必须在按钮点击里直接弹选文件框，手机浏览器才允许
-    const picking = pickFile('.bin,.md,.gen,.smd,application/octet-stream');
+    // 不按扩展名过滤：下载来的 ROM 扩展名五花八门，选错了会有提示
+    const picking = pickFile('');
     this.busy = true;
     try {
       const file = await picking;
       if (!file) return;
-      const { rom, info } = loadRomBytes(new Uint8Array(await file.arrayBuffer()));
-      const stored = await saveRom(rom, file.name);
+      let bytes: Uint8Array = new Uint8Array(await file.arrayBuffer());
+      let fileName = file.name;
+      const kind = archiveKind(bytes);
+      if (kind === 'rar' || kind === '7z') throw new Error(`这是 ${kind.toUpperCase()} 压缩包，请先解压，再选里面的 ROM 文件`);
+      if (kind === 'zip') {
+        const inner = await extractRomFromZip(bytes);
+        bytes = inner.data;
+        fileName = inner.name.split('/').pop() || inner.name;
+      }
+      const { rom, info } = loadRomBytes(bytes);
+      const stored = await saveRom(rom, fileName);
       const mb = (info.size / 1024 / 1024).toFixed(2);
       await this.ui.say(
         null,
-        `已导入：${file.name}（${mb} MB）\nCRC32 ${info.crc32}${info.wasSmd ? '，已从 SMD 格式转换' : ''}${stored ? '' : '\n这台设备存不下，下次打开要重新导入'}`,
+        `已导入：${fileName}（${mb} MB）\nCRC32 ${info.crc32}${info.wasSmd ? '，已从 SMD 格式转换' : ''}${stored ? '' : '\n这台设备存不下，下次打开要重新导入'}`,
       );
       if (!(await canUploadRom())) {
         await this.ui.say(null, 'ROM 只存在这台设备上。要让 Claude 分析，请在 claude.ai 里打开这个游戏页面再导入一次。');
@@ -102,7 +113,7 @@ export class TitleScene implements Scene {
       if (i !== 0) return;
       this.ui.toast('正在上传……', 60);
       try {
-        const id = await uploadRomForAnalysis(rom, info, file.name);
+        const id = await uploadRomForAnalysis(rom, info, fileName);
         this.ui.toast('上传完成', 2);
         await this.ui.say(null, `上传完成！回到和 Claude 的对话里说一声「ROM 传好了」就行。\n（附件编号 ${id.slice(0, 8)}）`);
       } catch (e) {
