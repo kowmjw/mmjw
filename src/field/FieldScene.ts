@@ -12,7 +12,7 @@ import type { Tap } from '../engine/input';
 import { findPath, type Pt } from '../engine/path';
 import { VH, VW } from '../engine/screen';
 import { sfx } from '../engine/sfx';
-import { AUTO_SLOT, exportSaves, importSaves, saveSettings, settings } from '../engine/storage';
+import { AUTO_SLOT, claudeRuntime, exportSaves, importSaves, saveSettings, settings } from '../engine/storage';
 import { drawText } from '../engine/text';
 import { UiLayer, drawWindow } from '../engine/ui';
 import { saveGame, slotItems } from '../game/saves';
@@ -503,16 +503,29 @@ export class FieldScene implements Scene {
       if (i === 0) settings.sound = !settings.sound;
       if (i === 1) settings.textSpeed = settings.textSpeed >= 80 ? 20 : settings.textSpeed >= 40 ? 80 : 40;
       saveSettings();
-      if (i === 2) this.exportFile();
+      if (i === 2) await this.exportFile();
       if (i === 3) await this.importFile();
     }
   }
 
-  private exportFile() {
-    const blob = new Blob([exportSaves()], { type: 'application/json' });
+  private async exportFile() {
+    const data = exportSaves();
+    const filename = 'shuihu-saves.json';
+    // 在 claude.ai 里用平台的下载确认框；普通网页直接下载
+    const runtime = claudeRuntime();
+    const downloads = runtime ? ((await runtime.use('downloads')) as { save(r: { filename: string; data: string }): Promise<unknown> } | null) : null;
+    if (downloads) {
+      try {
+        await downloads.save({ filename, data });
+        this.ui.toast('已导出存档文件');
+      } catch (e) {
+        this.ui.toast((e as { code?: string }).code === 'declined' ? '已取消导出' : '这里没法导出文件');
+      }
+      return;
+    }
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'shuihu-saves.json';
+    a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+    a.download = filename;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     this.ui.toast('已导出存档文件');

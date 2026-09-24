@@ -4,6 +4,7 @@ import { Game } from './engine/game';
 import { Input, bindTouchPad } from './engine/input';
 import { Screen, VH, VW } from './engine/screen';
 import { unlockAudio } from './engine/sfx';
+import { connectCloudSaves } from './engine/storage';
 import { TitleScene } from './scenes/TitleScene';
 import type { GameState } from './game/state';
 
@@ -19,9 +20,9 @@ document.body.classList.toggle('touch', touch);
 
 /** 竖屏：画面在上、手柄在下；横屏：画面居中，手柄放两边。 */
 function layout() {
-  const W = window.innerWidth;
+  const W = window.innerWidth - 32;
   const H = window.innerHeight;
-  const portrait = H >= W;
+  const portrait = H >= window.innerWidth;
   document.body.classList.toggle('portrait', portrait);
   document.body.classList.toggle('landscape', !portrait);
   let cssW: number;
@@ -47,6 +48,7 @@ function startGame(state: GameState) {
 }
 
 game.start(title());
+void connectCloudSaves();
 
 // 调试用：地址后面加 ?debug 可以在控制台里用 __game 查看状态
 if (new URLSearchParams(location.search).has('debug')) (window as unknown as { __game: Game }).__game = game;

@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:artifact": "npm run build && node tools/artifact.mjs"
   },
   "devDependencies": {
     "@fontsource/ma-shan-zheng": "^5.3.1",
