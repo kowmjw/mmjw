@@ -46,7 +46,7 @@ export class OrigTitle implements Scene {
       setHint('点屏幕跳过');
       return;
     }
-    setHint(this.ui.modalHint() ?? (this.busy ? '' : '点「开始游戏」从头玩，点「继续游戏」读取存档'));
+    setHint(this.ui.modalHint() ?? (this.busy ? '' : '原版数据已读取。点「开始游戏」从头玩，点「继续游戏」读取存档'));
     if (uiBusy || this.busy) return;
     if (input.pressed('up') || input.pressed('down')) {
       this.index = 1 - this.index;

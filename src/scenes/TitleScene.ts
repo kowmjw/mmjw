@@ -33,6 +33,8 @@ export class TitleScene implements Scene {
     private readonly start: (state: GameState, fresh: boolean) => void,
     /** 导入了认得的 ROM 时切到原版模式，返回 false 表示不认得这一版 */
     private readonly onRom?: (rom: Uint8Array) => boolean,
+    /** 提示栏开头的说明（比如没读到原版数据的原因） */
+    private readonly notice = '',
   ) {
     this.ui = new UiLayer(game.screen.ctx);
   }
@@ -42,7 +44,7 @@ export class TitleScene implements Scene {
     const input = this.game.input;
     const uiBusy = this.ui.update(dt, input);
     setHint(
-      this.ui.modalHint() ?? (this.busy ? '' : '点「开始游戏」开始新游戏，点「继续游戏」读取存档。有原版 ROM 的话点右边导入'),
+      this.ui.modalHint() ?? (this.busy ? '' : this.notice ? `${this.notice}。现在是旧版试玩` : '点「开始游戏」开始新游戏，点「继续游戏」读取存档。有原版 ROM 的话点右边导入'),
       this.ui.busy() || this.busy ? null : { label: '导入 ROM', onClick: () => void this.importRom() },
     );
     if (uiBusy || this.busy) return;

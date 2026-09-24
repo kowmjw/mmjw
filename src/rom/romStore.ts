@@ -115,37 +115,71 @@ export async function uploadRomForAnalysis(rom: Uint8Array, info: RomInfo, fileN
   return res.id;
 }
 
+export interface RomLoadResult {
+  rom: (LoadedRom & { fileName: string }) | null;
+  /** 每一步的结果，写进诊断记录，出问题时方便查 */
+  steps: string[];
+  /** 没读到时给玩家看的简短原因 */
+  reason: string;
+}
+
 /**
  * 在 claude.ai 里打开时，读存在这个游戏页面里的 ROM 附件：
  * 先看共享的 config/rom（Claude 放进去的），再看玩家自己上传记录的 data/users/<id>/rom。
  * 读到后存一份到本机，下次直接用。
  */
-export async function loadRomFromArtifact(): Promise<(LoadedRom & { fileName: string }) | null> {
+export async function loadRomFromArtifact(): Promise<RomLoadResult> {
+  const steps: string[] = [];
+  const fail = (reason: string) => ({ rom: null, steps, reason });
   const runtime = claudeRuntime();
-  if (!runtime) return null;
+  if (!runtime) {
+    steps.push('没有 window.claude');
+    return fail('不在 claude.ai 里打开');
+  }
+  let reason = '页面里没有 ROM 记录';
   try {
     const [db, user] = (await Promise.all([runtime.use('db'), runtime.use('user')])) as [DbApi | null, UserApi | null];
-    if (!db) return null;
+    steps.push(`db ${db ? '有' : '没有'}，user ${user ? '有' : '没有'}`);
+    if (!db) return fail('拿不到页面数据库');
     const ids: string[] = [];
     const shared = await db.doc('config/rom').get();
     const sharedId = shared.exists ? shared.data()?.assetId : undefined;
+    steps.push(`config/rom ${shared.exists ? `存在，附件 ${String(sharedId).slice(0, 8)}` : '不存在'}`);
     if (typeof sharedId === 'string') ids.push(sharedId);
     const uid = user ? await user.id() : null;
     if (uid) {
       const own = await db.doc(`data/users/${uid}/rom`).get();
       const ownId = own.exists ? own.data()?.assetId : undefined;
+      steps.push(`自己上传的 ROM ${own.exists ? '有' : '没有'}`);
       if (typeof ownId === 'string') ids.push(ownId);
     }
     for (const id of ids) {
-      const res = await fetch(`/_blob/${id}`);
-      if (!res.ok) continue;
-      const { rom, fileName } = romFromText(await res.text(), fromBase64);
+      let res: Response;
+      try {
+        res = await fetch(`/_blob/${id}`);
+      } catch (e) {
+        steps.push(`下载 ${id.slice(0, 8)} 出错：${e instanceof Error ? e.message : String(e)}`);
+        reason = '下载 ROM 附件失败';
+        continue;
+      }
+      steps.push(`下载 ${id.slice(0, 8)}：HTTP ${res.status}`);
+      if (!res.ok) {
+        reason = `下载 ROM 附件失败（HTTP ${res.status}）`;
+        continue;
+      }
+      const text = await res.text();
+      steps.push(`收到 ${text.length} 字`);
+      const { rom, fileName } = romFromText(text, fromBase64);
       const loaded = loadRomBytes(rom);
-      await saveRom(loaded.rom, fileName);
-      return { ...loaded, fileName };
+      steps.push(`ROM ${loaded.info.size} 字节，CRC32 ${loaded.info.crc32}`);
+      const stored = await saveRom(loaded.rom, fileName);
+      steps.push(stored ? '已存到本机' : '本机存不下（每次打开都要重新下载）');
+      return { rom: { ...loaded, fileName }, steps, reason: '' };
     }
   } catch (e) {
-    console.warn('读取 ROM 附件失败', e);
+    const msg = e instanceof Error ? e.message : String(e);
+    steps.push(`出错：${msg}`);
+    reason = `读取出错：${msg}`;
   }
-  return null;
+  return fail(reason);
 }

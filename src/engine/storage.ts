@@ -69,6 +69,11 @@ function savedAt(raw: string | null | undefined) {
   }
 }
 
+/** 把一条诊断记录写到玩家自己的云端空间（只有这位玩家和页面能看到），出问题时方便排查。 */
+export function cloudDiag(key: string, data: Record<string, unknown>) {
+  cloudWrite(`diag-${key}`, JSON.stringify({ ...data, at: new Date().toISOString() }));
+}
+
 export function claudeRuntime(): ClaudeRuntime | null {
   const c = (window as unknown as { claude?: ClaudeRuntime }).claude;
   return c && typeof c.use === 'function' ? c : null;

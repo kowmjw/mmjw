@@ -5,7 +5,7 @@ import { Input, bindTouchPad } from './engine/input';
 import { Screen, VH, VW } from './engine/screen';
 import { initHint } from './engine/hint';
 import { unlockAudio } from './engine/sfx';
-import { connectCloudSaves } from './engine/storage';
+import { cloudDiag, connectCloudSaves } from './engine/storage';
 import { TitleScene } from './scenes/TitleScene';
 import type { GameState } from './game/state';
 import type { Scene } from './engine/game';
@@ -59,8 +59,13 @@ window.addEventListener('resize', layout);
 const game = new Game(screen, input);
 let assets: RomAssets | null = null;
 
+/** 这一版的标记，写进诊断记录，方便确认玩家那边跑的是哪一版 */
+const BUILD = '原版模式 2';
+/** 没读到 ROM 的原因，显示在旧版标题的提示栏里 */
+let romNotice = '';
+
 // ───────── 没有 ROM：用我画的临时素材跑复刻剧情 ─────────
-const title = () => new TitleScene(game, startGame, useRom);
+const title = () => new TitleScene(game, startGame, useRom, romNotice);
 
 function startGame(state: GameState) {
   void game.switchTo(new FieldScene(game, state, { toTitle: () => game.switchTo(title()) }));
@@ -108,22 +113,42 @@ class Boot implements Scene {
 
 async function boot() {
   let rom: Uint8Array | null = null;
+  const steps: string[] = [];
+  let source = 'none';
   try {
     const saved = await loadSavedRom();
-    if (saved && isKnownRom(saved.rom)) rom = saved.rom;
+    steps.push(saved ? `本机有 ROM：${saved.fileName}` : '本机没有 ROM');
+    if (saved && isKnownRom(saved.rom)) {
+      rom = saved.rom;
+      source = 'local';
+    }
     if (!rom) {
       const remote = await loadRomFromArtifact();
-      if (remote && isKnownRom(remote.rom)) rom = remote.rom;
+      steps.push(...remote.steps);
+      if (remote.rom && isKnownRom(remote.rom.rom)) {
+        rom = remote.rom.rom;
+        source = 'asset';
+      } else if (remote.rom) {
+        romNotice = '读到的 ROM 不是认得的版本';
+      } else if (claudeInPage()) {
+        romNotice = `没读到原版数据：${remote.reason}`;
+      }
     }
   } catch (e) {
-    console.warn(e);
+    steps.push(`出错：${e instanceof Error ? e.message : String(e)}`);
+    romNotice = '没读到原版数据：读取出错';
   }
+  cloudDiag('boot', { build: BUILD, mode: rom ? 'orig' : 'old', source, steps, ua: navigator.userAgent });
   if (rom) {
     assets = new RomAssets(rom);
     void game.switchTo(origTitle());
   } else {
     void game.switchTo(title());
   }
+}
+
+function claudeInPage() {
+  return typeof (window as unknown as { claude?: unknown }).claude === 'object';
 }
 
 game.start(new Boot());
