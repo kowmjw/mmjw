@@ -1,3 +1,4 @@
+import { drawBrush, brushWidth } from '../art/brush';
 import type { Input } from './input';
 import { VH, VW } from './screen';
 import { sfx } from './sfx';
@@ -40,6 +41,20 @@ export function drawCursor(ctx: CanvasRenderingContext2D, x: number, y: number, 
   ctx.fill();
 }
 
+export function drawBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, ratio: number) {
+  ctx.fillStyle = '#101018';
+  ctx.fillRect(x, y, w, h);
+  const r = Math.max(0, Math.min(1, ratio));
+  ctx.fillStyle = r > 0.5 ? '#50d860' : r > 0.25 ? '#f0d040' : '#f05040';
+  ctx.fillRect(x, y, Math.round(w * r), h);
+}
+
+interface Modal {
+  done: boolean;
+  update(dt: number, input: Input): void;
+  draw(ctx: CanvasRenderingContext2D): void;
+}
+
 export interface MenuItem {
   label: string;
   enabled?: boolean;
@@ -59,7 +74,8 @@ export interface MenuOpts {
 
 const LINE_H = 16;
 
-export class Menu {
+export class Menu implements Modal {
+  done = false;
   index = 0;
   private scroll = 0;
   private t = 0;
@@ -72,23 +88,24 @@ export class Menu {
 
   constructor(
     readonly items: MenuItem[],
-    private readonly opts: MenuOpts = {},
-    ctx?: CanvasRenderingContext2D,
+    private readonly opts: MenuOpts,
+    ctx: CanvasRenderingContext2D,
+    private readonly resolve: (i: number) => void,
   ) {
     this.visible = Math.min(items.length, opts.maxVisible ?? 8);
     this.titleH = opts.title ? 16 : 0;
     let w = opts.width ?? 0;
-    if (!w && ctx) {
-      for (const it of items) w = Math.max(w, textWidth(ctx, it.label) + (it.right ? textWidth(ctx, it.right) + 12 : 0));
-      if (opts.title) w = Math.max(w, textWidth(ctx, opts.title));
+    if (!w) {
+      for (const it of items) w = Math.max(w, textWidth(ctx, it.label) + (it.right ? textWidth(ctx, it.right) + 14 : 0));
+      if (opts.title) w = Math.max(w, textWidth(ctx, opts.title) - 8);
       w += 30;
     }
-    this.w = Math.max(w || 96, 64);
+    this.w = Math.max(w, 64);
     this.h = this.visible * LINE_H + 10 + this.titleH;
-    this.x = Math.round(opts.x ?? (VW - this.w) / 2);
-    this.y = Math.round(opts.y ?? (VH - this.h) / 2);
-    const start = opts.start ?? items.findIndex((it) => it.enabled !== false);
-    this.index = Math.max(0, start);
+    this.x = Math.round(Math.max(2, Math.min(VW - this.w - 2, opts.x ?? (VW - this.w) / 2)));
+    this.y = Math.round(Math.max(2, Math.min(VH - this.h - 2, opts.y ?? (VH - this.h) / 2)));
+    const first = items.findIndex((it) => it.enabled !== false);
+    this.index = Math.max(0, opts.start ?? first);
     this.fixScroll();
   }
 
@@ -97,8 +114,12 @@ export class Menu {
     if (this.index >= this.scroll + this.visible) this.scroll = this.index - this.visible + 1;
   }
 
-  /** 返回选中的序号；取消返回 -1；还没选返回 null。 */
-  update(dt: number, input: Input): number | null {
+  private finish(i: number) {
+    this.done = true;
+    this.resolve(i);
+  }
+
+  update(dt: number, input: Input) {
     this.t += dt;
     const n = this.items.length;
     if (input.pressed('up')) {
@@ -115,33 +136,34 @@ export class Menu {
       const inside = tap.x >= this.x && tap.x < this.x + this.w && tap.y >= this.y && tap.y < this.y + this.h;
       if (inside) {
         const row = Math.floor((tap.y - this.y - 5 - this.titleH) / LINE_H) + this.scroll;
-        if (row >= 0 && row < n && row < this.scroll + this.visible) {
+        if (tap.y < this.y + 5 + this.titleH) {
+          if (this.scroll > 0) this.scroll--;
+        } else if (row >= this.scroll + this.visible) {
+          if (this.scroll + this.visible < n) this.scroll++;
+        } else if (row >= 0 && row < n) {
           this.index = row;
-          return this.choose();
+          this.choose();
         }
-        return null;
-      }
-      if (this.opts.cancelable !== false) {
+      } else if (this.opts.cancelable !== false) {
         sfx.cancel();
-        return -1;
+        this.finish(-1);
       }
-      return null;
+      return;
     }
-    if (input.pressed('ok')) return this.choose();
-    if (input.pressed('cancel') && this.opts.cancelable !== false) {
+    if (input.pressed('ok')) this.choose();
+    else if (input.pressed('cancel') && this.opts.cancelable !== false) {
       sfx.cancel();
-      return -1;
+      this.finish(-1);
     }
-    return null;
   }
 
-  private choose(): number | null {
+  private choose() {
     if (this.items[this.index].enabled === false) {
       sfx.cancel();
-      return null;
+      return;
     }
     sfx.ok();
-    return this.index;
+    this.finish(this.index);
   }
 
   draw(ctx: CanvasRenderingContext2D) {
@@ -159,51 +181,41 @@ export class Menu {
       if (i === this.index) drawCursor(ctx, this.x + 7, y + 4, this.t);
       y += LINE_H;
     }
-    if (this.scroll > 0) drawText(ctx, '▲', this.x + this.w / 2, this.y + this.titleH + 1, { size: 8, align: 'center' });
-    if (this.scroll + this.visible < this.items.length) drawText(ctx, '▼', this.x + this.w / 2, this.y + this.h - 9, { size: 8, align: 'center' });
+    if (this.scroll > 0) drawText(ctx, '▲', this.x + this.w - 14, this.y + this.titleH + 3, { size: 8 });
+    if (this.scroll + this.visible < this.items.length) drawText(ctx, '▼', this.x + this.w - 14, this.y + this.h - 11, { size: 8 });
   }
 }
 
 const BOX_H = 58;
 const LINES_PER_PAGE = 3;
 
-/** 屏幕下方的对话框，逐字显示。 */
-export class Dialogue {
-  active = false;
-  /** 只显示不等待按键（给选项菜单当题目用） */
-  private fixed = false;
-  private speaker: string | null = null;
-  private portrait: HTMLCanvasElement | null = null;
-  private lines: string[] = [];
+/** 屏幕下方的对话框，逐字显示。fixed 的只显示不等按键（给选项菜单当题目）。 */
+class Dialogue implements Modal {
+  done = false;
+  private lines: string[];
   private page = 0;
   private shown = 0;
   private t = 0;
-  private resolve: (() => void) | null = null;
 
-  constructor(private readonly measure: CanvasRenderingContext2D) {}
-
-  open(speaker: string | null, text: string, portrait: HTMLCanvasElement | null = null, fixed = false): Promise<void> {
-    this.speaker = speaker;
-    this.portrait = portrait;
-    this.lines = wrapText(this.measure, text, VW - 8 - (portrait ? 58 : 22));
-    this.page = 0;
-    this.shown = fixed ? Infinity : 0;
-    this.fixed = fixed;
-    this.active = true;
-    return new Promise((r) => {
-      this.resolve = r;
-    });
-  }
-
-  close() {
-    this.active = false;
-    const r = this.resolve;
-    this.resolve = null;
-    r?.();
+  constructor(
+    ctx: CanvasRenderingContext2D,
+    private readonly speaker: string | null,
+    text: string,
+    private readonly portrait: HTMLCanvasElement | null,
+    private readonly fixed: boolean,
+    private readonly resolve: () => void,
+  ) {
+    this.lines = wrapText(ctx, text, VW - 8 - (portrait ? 64 : 24));
+    if (fixed) this.shown = Infinity;
   }
 
   private pageText() {
     return this.lines.slice(this.page * LINES_PER_PAGE, this.page * LINES_PER_PAGE + LINES_PER_PAGE);
+  }
+
+  close() {
+    this.done = true;
+    this.resolve();
   }
 
   update(dt: number, input: Input) {
@@ -225,7 +237,6 @@ export class Dialogue {
   }
 
   draw(ctx: CanvasRenderingContext2D) {
-    if (!this.active) return;
     const x = 4;
     const y = VH - BOX_H - 4;
     drawWindow(ctx, x, y, VW - 8, BOX_H);
@@ -243,9 +254,8 @@ export class Dialogue {
     }
     let left = this.shown;
     this.pageText().forEach((line, i) => {
-      const part = line.slice(0, Math.max(0, Math.floor(left)));
+      drawText(ctx, line.slice(0, Math.max(0, Math.floor(left))), tx, y + 9 + i * 15);
       left -= line.length;
-      drawText(ctx, part, tx, y + 9 + i * 15);
     });
     if (!this.fixed && left >= 0 && Math.floor(this.t * 3) % 2 === 0) {
       drawText(ctx, '▼', VW - 18, y + BOX_H - 14, { size: 8, color: '#ffe070' });
@@ -253,18 +263,86 @@ export class Dialogue {
   }
 }
 
-/** 每个场景一份：管理对话框和菜单，给剧情脚本提供 await 用的接口。 */
+/** 自定义内容的面板，按任意键关闭。 */
+class Panel implements Modal {
+  done = false;
+  constructor(
+    private readonly paint: (ctx: CanvasRenderingContext2D) => void,
+    private readonly resolve: () => void,
+  ) {}
+  update(_dt: number, input: Input) {
+    if (input.takeTap() || input.pressed('ok') || input.pressed('cancel')) {
+      sfx.cursor();
+      this.done = true;
+      this.resolve();
+    }
+  }
+  draw(ctx: CanvasRenderingContext2D) {
+    this.paint(ctx);
+  }
+}
+
+/** 黑底旁白：标题（毛笔字）加上一行行淡入的文字。 */
+class Narration implements Modal {
+  done = false;
+  private t = 0;
+  constructor(
+    private readonly lines: string[],
+    private readonly title: string | null,
+    private readonly subtitle: string | null,
+    private readonly resolve: () => void,
+  ) {}
+  private get allShown() {
+    return this.t >= this.lines.length * 0.7 + 0.6;
+  }
+  update(dt: number, input: Input) {
+    this.t += dt;
+    if (input.takeTap() || input.pressed('ok') || input.pressed('cancel')) {
+      if (!this.allShown) this.t = 99;
+      else {
+        this.done = true;
+        this.resolve();
+      }
+    }
+  }
+  draw(ctx: CanvasRenderingContext2D) {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, VW, VH);
+    let y = 24;
+    if (this.title) {
+      const size = this.lines.length ? 40 : 56;
+      const w = brushWidth(this.title, size);
+      if (!this.lines.length) y = this.subtitle ? 64 : 84;
+      drawBrush(ctx, this.title, (VW - w) / 2, y, size, { fill: '#f4e6c4', outline: '#5a1a10', outlineWidth: 3 });
+      y += size + 6;
+      if (this.subtitle) {
+        const sw = brushWidth(this.subtitle, size * 0.62);
+        drawBrush(ctx, this.subtitle, (VW - sw) / 2, y, size * 0.62, { fill: '#e8b060', outline: '#3a1008', outlineWidth: 2 });
+        y += size * 0.62 + 8;
+      }
+    }
+    const lineH = 17;
+    const top = this.title ? y : (VH - this.lines.length * lineH) / 2;
+    this.lines.forEach((line, i) => {
+      const a = Math.max(0, Math.min(1, (this.t - i * 0.7) / 0.6));
+      if (a <= 0) return;
+      ctx.globalAlpha = a;
+      drawText(ctx, line, VW / 2, top + i * lineH, { align: 'center', color: '#f0ead8' });
+      ctx.globalAlpha = 1;
+    });
+    if (this.allShown && Math.floor(this.t * 2) % 2 === 0) drawText(ctx, '▼', VW - 16, VH - 14, { size: 8, color: '#ffe070' });
+  }
+}
+
+/** 每个场景一份：管理对话框、菜单等弹窗，给剧情脚本提供 await 用的接口。 */
 export class UiLayer {
-  readonly dialogue: Dialogue;
-  private menus: { menu: Menu; resolve: (i: number) => void }[] = [];
+  private stack: Modal[] = [];
   private notice: { text: string; t: number } | null = null;
 
-  constructor(private readonly ctx: CanvasRenderingContext2D) {
-    this.dialogue = new Dialogue(ctx);
-  }
+  constructor(private readonly ctx: CanvasRenderingContext2D) {}
 
   busy() {
-    return this.dialogue.active || this.menus.length > 0;
+    return this.stack.length > 0;
   }
 
   /** 有弹窗时处理输入并返回 true，场景自己就不要再处理输入了。 */
@@ -273,47 +351,48 @@ export class UiLayer {
       this.notice.t -= dt;
       if (this.notice.t <= 0) this.notice = null;
     }
-    const top = this.menus[this.menus.length - 1];
-    if (top) {
-      const r = top.menu.update(dt, input);
-      if (r !== null) {
-        this.menus.pop();
-        top.resolve(r);
-      }
-      return true;
-    }
-    if (this.dialogue.active) {
-      this.dialogue.update(dt, input);
-      return true;
-    }
-    return false;
+    const top = this.stack[this.stack.length - 1];
+    if (!top) return false;
+    top.update(dt, input);
+    this.stack = this.stack.filter((m) => !m.done);
+    return true;
   }
 
   draw(ctx: CanvasRenderingContext2D) {
-    this.dialogue.draw(ctx);
-    for (const m of this.menus) m.menu.draw(ctx);
     if (this.notice) {
       const w = textWidth(ctx, this.notice.text) + 24;
       drawWindow(ctx, (VW - w) / 2, 8, w, 22);
       drawText(ctx, this.notice.text, VW / 2, 13, { align: 'center' });
     }
+    for (const m of this.stack) m.draw(ctx);
   }
 
-  say(speaker: string | null, text: string, portrait: HTMLCanvasElement | null = null) {
-    return this.dialogue.open(speaker, text, portrait);
+  say(speaker: string | null, text: string, portrait: HTMLCanvasElement | null = null): Promise<void> {
+    return new Promise((r) => this.stack.push(new Dialogue(this.ctx, speaker, text, portrait, false, r)));
   }
 
   choose(items: (string | MenuItem)[], opts: MenuOpts = {}): Promise<number> {
     const list = items.map((it) => (typeof it === 'string' ? { label: it } : it));
-    return new Promise((resolve) => this.menus.push({ menu: new Menu(list, opts, this.ctx), resolve }));
+    return new Promise((r) => this.stack.push(new Menu(list, opts, this.ctx, r)));
   }
 
-  /** 先把问题显示在对话框里，再弹出选项。 */
-  async ask(speaker: string | null, text: string, options: string[], portrait: HTMLCanvasElement | null = null): Promise<number> {
-    void this.dialogue.open(speaker, text, portrait, true);
-    const i = await this.choose(options, { x: VW - 104, y: VH - 66 - (options.length * 16 + 10), width: 96 });
-    this.dialogue.close();
+  /** 先把问题显示在对话框里，再弹出选项；取消返回 -1。 */
+  async ask(speaker: string | null, text: string, options: string[], portrait: HTMLCanvasElement | null = null, cancelable = true): Promise<number> {
+    const d = new Dialogue(this.ctx, speaker, text, portrait, true, () => {});
+    this.stack.push(d);
+    const h = options.length * LINE_H + 10;
+    const i = await this.choose(options, { x: VW - 112, y: VH - 66 - h, width: 104, cancelable });
+    d.close();
+    this.stack = this.stack.filter((m) => !m.done);
     return i;
+  }
+
+  panel(paint: (ctx: CanvasRenderingContext2D) => void): Promise<void> {
+    return new Promise((r) => this.stack.push(new Panel(paint, r)));
+  }
+
+  narrate(lines: string[], title: string | null = null, subtitle: string | null = null): Promise<void> {
+    return new Promise((r) => this.stack.push(new Narration(lines, title, subtitle, r)));
   }
 
   /** 屏幕上方短暂提示，不打断操作。 */

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#0d0f17" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="description" content="MD《水浒传》（川普科技 1996）的非官方网页复刻，手机浏览器可玩。" />
+    <title>水浒传复刻</title>
+  </head>
+  <body>
+    <div id="app">
+      <div id="stage"><canvas id="screen" aria-label="游戏画面"></canvas></div>
+      <div id="pad">
+        <div class="dpad" aria-label="方向键">
+          <span class="arrow up">▲</span>
+          <span class="arrow down">▼</span>
+          <span class="arrow left">◀</span>
+          <span class="arrow right">▶</span>
+        </div>
+        <div class="buttons">
+          <button type="button" class="menu" data-act="menu">菜单</button>
+          <button type="button" class="b" data-act="cancel">B</button>
+          <button type="button" class="a" data-act="ok">A</button>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
