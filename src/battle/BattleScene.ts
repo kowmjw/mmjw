@@ -1,5 +1,6 @@
 import { drawBrush, brushWidth } from '../art/brush';
-import { charSprite, charSpriteFlash, charSpriteGray, type Facing } from '../art/characters';
+import { charSpriteFlash, charSprite, charSpriteGray, type Facing } from '../art/characters';
+import { portrait } from '../art/portraits';
 import { TILE, renderMap } from '../art/tiles';
 import type { BattleDef } from '../data/battles';
 import { lookOf } from '../data/characters';
@@ -94,7 +95,7 @@ export class BattleScene implements Scene {
     this.talk = {
       say: (who, text) => {
         const s = SPEAKERS[who];
-        return this.ui.say(s?.name ?? who, text, s ? charSprite(lookOf(s.look)) : null);
+        return this.ui.say(s?.name ?? who, text, s ? portrait(lookOf(s.look)) : null);
       },
       msg: (text) => this.ui.say(null, text),
     };
@@ -356,7 +357,7 @@ export class BattleScene implements Scene {
       const ready = this.battle.units.filter((u) => u.side === 'player' && u.alive && !u.acted).length;
       text = this.danger
         ? `红色是${this.danger.unit.name}下回合能打到的范围，再点它一次关闭`
-        : `我方回合：点头上有黄箭头的人物行动（还剩 ${ready} 人）。点敌人能看它的攻击范围`;
+        : `点有黄箭头的我方人物行动（剩 ${ready} 人）；点敌人看它的攻击范围`;
       button = { label: '结束回合', onClick: () => this.requestEndTurn() };
     } else if (this.mode === 'move') text = '点蓝格走过去；点红色范围里的敌人会自动走过去打；点人物自己原地行动；B 取消';
     else if (this.mode === 'target') text = this.targetKind === 'attack' ? '点红框里的敌人看伤害预测，再点一次同一个敌人就出手；B 返回' : '点绿框里的同伴使用；B 返回';
@@ -738,7 +739,7 @@ export class BattleScene implements Scene {
       const look = lookOf(u.charId);
       const facing = this.facing.get(u.uid) ?? 'down';
       const moving = this.pixelPos.has(u.uid);
-      const frame = moving ? Math.floor(this.t * 10) % 2 : !u.acted && u.side === 'player' ? Math.floor(this.t * 2) % 2 : 0;
+      const frame = moving ? [1, 0, 2, 0][Math.floor(this.t * 12) % 4] : !u.acted && u.side === 'player' ? [0, 1, 0, 2][Math.floor(this.t * 3) % 4] : 0;
       let img = u.acted && u.side === 'player' ? charSpriteGray(look, facing, frame) : charSprite(look, facing, frame);
       if ((this.flashUntil.get(u.uid) ?? 0) > this.t && Math.floor(this.t * 30) % 2 === 0) img = charSpriteFlash(look, facing, frame);
       ctx.drawImage(img, x, y - 2);

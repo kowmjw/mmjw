@@ -22,7 +22,7 @@ const LIST: CharDef[] = [
     title: '托塔天王',
     cls: 'daoke',
     level: 4,
-    look: { skin: SKIN, hair: BLACK_HAIR, style: 'topknot', hat: '#c03030', beard: BLACK_HAIR, cloth: '#b83a2a', trim: '#f0d890', belt: '#402010', pants: '#5a3a2a', weapon: 'sword' },
+    look: { skin: SKIN, hair: BLACK_HAIR, style: 'topknot', hat: '#c03030', beard: BLACK_HAIR, cloth: '#b83a2a', trim: '#f0d890', belt: '#402010', pants: '#5a3a2a', weapon: 'sword', brow: 'fierce', beardStyle: 'full' },
   },
   {
     id: 'wuyong',
@@ -30,7 +30,7 @@ const LIST: CharDef[] = [
     title: '智多星',
     cls: 'ceshi',
     level: 3,
-    look: { skin: '#f4c8a0', hair: BLACK_HAIR, style: 'scholar', hat: '#2a3a6a', cloth: '#4a6ab8', trim: '#e8e8f0', belt: '#e8e8f0', pants: '#3a4a7a', robe: true, weapon: 'fan' },
+    look: { skin: '#f4c8a0', hair: BLACK_HAIR, style: 'scholar', hat: '#2a3a6a', beard: BLACK_HAIR, cloth: '#4a6ab8', trim: '#e8e8f0', belt: '#e8e8f0', pants: '#3a4a7a', robe: true, weapon: 'fan', eyes: 'narrow', brow: 'raised', beardStyle: 'goatee', mouth: 'smile' },
   },
   {
     id: 'liutang',
@@ -38,7 +38,7 @@ const LIST: CharDef[] = [
     title: '赤发鬼',
     cls: 'quanshi',
     level: 3,
-    look: { skin: '#d89868', hair: '#d83a1a', style: 'wild', cloth: '#6a4a2a', trim: '#d89868', belt: '#2a1a10', pants: '#3a2a1a' },
+    look: { skin: '#d89868', hair: '#d83a1a', style: 'wild', cloth: '#6a4a2a', trim: '#d89868', belt: '#2a1a10', pants: '#3a2a1a', brow: 'fierce', mark: '#c83a2a', mouth: 'open' },
   },
   {
     id: 'shijin',
@@ -46,7 +46,7 @@ const LIST: CharDef[] = [
     title: '九纹龙',
     cls: 'qiangshushi',
     level: 4,
-    look: { skin: SKIN, hair: BLACK_HAIR, style: 'band', hat: '#2a8a4a', cloth: '#ece4cc', trim: '#3a6ad8', belt: '#2a8a4a', pants: '#3a3a4a', tattoo: '#3a6ad8', weapon: 'spear' },
+    look: { skin: SKIN, hair: BLACK_HAIR, style: 'band', hat: '#2a8a4a', cloth: '#ece4cc', trim: '#f0c090', belt: '#2a8a4a', pants: '#3a3a4a', tattoo: '#3a6ad8', weapon: 'spear', mouth: 'smile' },
   },
   {
     id: 'likui',
@@ -54,7 +54,7 @@ const LIST: CharDef[] = [
     title: '黑旋风',
     cls: 'daoke',
     level: 4,
-    look: { skin: '#8a5a3a', hair: '#101010', style: 'wild', beard: '#101010', cloth: '#2a2a2a', trim: '#8a5a3a', belt: '#a02020', pants: '#3a2a1a', weapon: 'axes' },
+    look: { skin: '#8a5a3a', hair: '#101010', style: 'wild', beard: '#101010', cloth: '#2a2a2a', trim: '#8a5a3a', belt: '#a02020', pants: '#3a2a1a', weapon: 'axes', eyes: 'round', brow: 'fierce', beardStyle: 'full', mouth: 'open' },
   },
   // 敌兵
   {
@@ -86,13 +86,13 @@ export const CHARS: Record<string, CharDef> = Object.fromEntries(LIST.map((c) =>
 export const NPC_LOOKS: Record<string, Look> = {
   villager: { skin: SKIN, hair: BLACK_HAIR, style: 'cap', hat: '#6a5a3a', cloth: '#8a6a4a', belt: '#4a3a2a', pants: '#5a4a3a' },
   farmer: { skin: '#e0a878', hair: BLACK_HAIR, style: 'straw', hat: '#d8c070', cloth: '#7a8a5a', trim: '#e0a878', pants: '#5a5a3a', weapon: 'hoe' },
-  child: { skin: '#f8d0a8', hair: BLACK_HAIR, style: 'topknot', cloth: '#d86a6a', pants: '#8a4a4a' },
-  granny: { skin: '#f0c8a0', hair: '#e8e8e8', style: 'bun', cloth: '#6a5a7a', trim: '#b8a8c8', robe: true, weapon: 'cane' },
-  hunter: { skin: '#e0a878', hair: BLACK_HAIR, style: 'fur', hat: '#8a6a3a', beard: '#3a2a1a', cloth: '#5a6a3a', belt: '#3a2a1a', pants: '#4a3a2a', weapon: 'bow' },
+  child: { skin: '#f8d0a8', hair: BLACK_HAIR, style: 'topknot', cloth: '#d86a6a', pants: '#8a4a4a', eyes: 'round', mouth: 'smile' },
+  granny: { skin: '#f0c8a0', hair: '#e8e8e8', style: 'bun', cloth: '#6a5a7a', trim: '#b8a8c8', robe: true, weapon: 'cane', eyes: 'old', mouth: 'smile' },
+  hunter: { skin: '#e0a878', hair: BLACK_HAIR, style: 'fur', hat: '#8a6a3a', beard: '#3a2a1a', cloth: '#5a6a3a', belt: '#3a2a1a', pants: '#4a3a2a', weapon: 'bow', beardStyle: 'short' },
   servant: { skin: SKIN, hair: BLACK_HAIR, style: 'cap', hat: '#3a3a5a', cloth: '#4a4a6a', belt: '#2a2a3a', pants: '#3a3a4a', weapon: 'staff' },
   fisherman: { skin: '#d8a070', hair: '#302018', style: 'straw', hat: '#e0cc88', cloth: '#6a8aa8', trim: '#d8a070', pants: '#6a8aa8' },
   woman: { skin: '#f8d0b0', hair: BLACK_HAIR, style: 'long', hat: '#d04060', cloth: '#c86a8a', trim: '#f0d0e0', robe: true },
-  girl: { skin: '#f8d0b0', hair: BLACK_HAIR, style: 'long', hat: '#f0a020', cloth: '#e08aa8', robe: true },
+  girl: { skin: '#f8d0b0', hair: BLACK_HAIR, style: 'long', hat: '#f0a020', cloth: '#e08aa8', robe: true, eyes: 'round', mouth: 'smile' },
 };
 
 export function lookOf(id: string): Look {

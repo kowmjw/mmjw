@@ -1,4 +1,4 @@
-// 人物像素小人（16×16），用代码按「发型/衣服/武器」拼出来。
+// 人物行走图（16×16，四个方向，站立 + 两个迈步帧），用代码按「发型/衣服/武器」拼出来。
 // 这是临时美术：以后从原版 ROM 提取的行走图会替换掉这里。
 import { ctx2d, flipX, grayscale, makeCanvas, outline, silhouette } from '../engine/pixel';
 
@@ -22,6 +22,16 @@ export interface Look {
   robe?: boolean;
   /** 胳膊上的刺青（史进） */
   tattoo?: string;
+  // 以下只影响对话头像
+  /** 眉毛：平/凶/上扬 */
+  brow?: 'calm' | 'fierce' | 'raised';
+  /** 眼睛：普通/圆瞪/细长/老人 */
+  eyes?: 'normal' | 'round' | 'narrow' | 'old';
+  /** 胡子样式（有 beard 颜色时才画） */
+  beardStyle?: 'full' | 'goatee' | 'short';
+  mouth?: 'flat' | 'smile' | 'open';
+  /** 脸上的记号颜色（刘唐的朱砂记） */
+  mark?: string;
 }
 
 const EYE = '#1a1010';
@@ -29,141 +39,7 @@ const STEEL = '#e6ecf6';
 const STEEL_DARK = '#9aa4b8';
 const WOOD = '#8a5a2a';
 const WOOD_DARK = '#5a3414';
-
-type Px = (x: number, y: number, w: number, h: number, c: string) => void;
-
-function drawHair(p: Px, look: Look, back: boolean) {
-  const h = look.hair;
-  const hat = look.hat ?? h;
-  switch (look.style) {
-    case 'topknot':
-      p(5, 2, 6, 2, h);
-      p(4, 3, 1, 2, h);
-      p(11, 3, 1, 2, h);
-      p(7, 0, 2, 2, h);
-      if (look.hat) p(7, 2, 2, 1, hat);
-      break;
-    case 'scholar':
-      p(4, 1, 8, 3, hat);
-      p(5, 0, 6, 1, hat);
-      p(4, 4, 1, 1, h);
-      p(11, 4, 1, 1, h);
-      p(back ? 7 : 11, back ? 4 : 1, back ? 2 : 1, back ? 3 : 1, hat);
-      break;
-    case 'band':
-      p(5, 2, 6, 2, h);
-      p(4, 3, 1, 3, h);
-      p(11, 3, 1, 3, h);
-      p(4, 3, 8, 1, hat);
-      p(12, 3, 1, 2, hat);
-      break;
-    case 'straw':
-      p(5, 3, 6, 1, h);
-      p(2, 3, 12, 1, hat);
-      p(4, 1, 8, 2, hat);
-      p(6, 0, 4, 1, hat);
-      p(3, 3, 10, 1, shade(hat));
-      break;
-    case 'bald':
-      p(5, 2, 6, 1, look.skin);
-      if (!back) p(6, 2, 2, 1, '#fff4dc');
-      break;
-    case 'wild':
-      p(4, 1, 8, 3, h);
-      p(3, 1, 1, 1, h);
-      p(4, 0, 1, 1, h);
-      p(7, 0, 1, 1, h);
-      p(10, 0, 1, 1, h);
-      p(12, 1, 1, 1, h);
-      p(4, 4, 1, 2, h);
-      p(11, 4, 1, 2, h);
-      break;
-    case 'bun':
-      p(5, 2, 6, 2, h);
-      p(4, 3, 1, 2, h);
-      p(11, 3, 1, 2, h);
-      p(6, 0, 4, 2, h);
-      break;
-    case 'fur':
-      p(4, 1, 8, 3, hat);
-      p(4, 3, 8, 1, tint(hat));
-      p(5, 0, 6, 1, hat);
-      break;
-    case 'long':
-      p(5, 2, 6, 2, h);
-      p(4, 3, 1, 6, h);
-      p(11, 3, 1, 6, h);
-      if (look.hat) p(9, 1, 2, 1, hat);
-      break;
-    case 'cap':
-      p(5, 1, 6, 2, hat);
-      p(5, 3, 6, 1, h);
-      break;
-  }
-}
-
-function drawWeapon(p: Px, w: Weapon | undefined) {
-  switch (w) {
-    case 'sword':
-      p(13, 4, 1, 7, STEEL);
-      p(13, 9, 1, 2, STEEL_DARK);
-      p(12, 11, 3, 1, '#c8a040');
-      p(13, 12, 1, 2, WOOD_DARK);
-      break;
-    case 'spear':
-      p(13, 2, 1, 13, WOOD);
-      p(13, 0, 1, 2, STEEL);
-      p(12, 2, 1, 1, '#d02020');
-      p(14, 2, 1, 1, '#d02020');
-      break;
-    case 'fan':
-      p(12, 8, 3, 3, '#f6f2e4');
-      p(12, 8, 1, 1, '#c8c0a8');
-      p(14, 10, 1, 1, '#c8c0a8');
-      p(13, 11, 1, 1, WOOD);
-      break;
-    case 'axes':
-      p(13, 7, 1, 6, WOOD_DARK);
-      p(14, 7, 2, 3, STEEL);
-      p(2, 7, 1, 6, WOOD_DARK);
-      p(0, 7, 2, 3, STEEL);
-      break;
-    case 'fork':
-      p(13, 3, 1, 12, WOOD);
-      p(12, 3, 3, 1, STEEL_DARK);
-      p(12, 0, 1, 3, STEEL);
-      p(13, 0, 1, 3, STEEL);
-      p(14, 0, 1, 3, STEEL);
-      break;
-    case 'bow':
-      p(14, 4, 1, 1, WOOD);
-      p(15, 5, 1, 5, WOOD);
-      p(14, 10, 1, 1, WOOD);
-      p(14, 5, 1, 5, '#e8e4d0');
-      break;
-    case 'cane':
-      p(12, 10, 1, 6, WOOD);
-      p(11, 10, 1, 1, WOOD);
-      break;
-    case 'staff':
-      p(13, 1, 1, 14, WOOD);
-      break;
-    case 'hoe':
-      p(13, 3, 1, 12, WOOD);
-      p(12, 2, 3, 1, STEEL_DARK);
-      break;
-    default:
-      break;
-  }
-}
-
-function shade(hex: string) {
-  return mix(hex, '#000000', 0.25);
-}
-
-function tint(hex: string) {
-  return mix(hex, '#ffffff', 0.3);
-}
+const GOLD = '#d8b040';
 
 function mix(a: string, b: string, t: number) {
   const pa = parseInt(a.slice(1), 16);
@@ -173,64 +49,353 @@ function mix(a: string, b: string, t: number) {
   return `#${((m(16) << 16) | (m(8) << 8) | m(0)).toString(16).padStart(6, '0')}`;
 }
 
+const shade = (hex: string, t = 0.28) => mix(hex, '#000000', t);
+const tint = (hex: string, t = 0.3) => mix(hex, '#ffffff', t);
+
+type View = 'front' | 'side' | 'back';
+type Px = (x: number, y: number, w: number, h: number, c: string) => void;
+
+/** 头的轮廓（8×8，圆角），按行给出 x 范围。 */
+const HEAD_ROWS: [number, number, number][] = [
+  [1, 6, 9],
+  [2, 5, 10],
+  [3, 4, 11],
+  [4, 4, 11],
+  [5, 4, 11],
+  [6, 4, 11],
+  [7, 4, 11],
+  [8, 5, 10],
+];
+
+function drawLegs(p: Px, look: Look, view: View, frame: number) {
+  const cloth = look.cloth;
+  const pants = look.pants ?? '#3a2a1a';
+  const shoes = look.shoes ?? '#2a1a10';
+  if (view === 'side') {
+    const near = look.robe ? cloth : pants;
+    const far = shade(near, 0.3);
+    if (look.robe) p(5, 13, 5, 2, cloth);
+    if (frame === 0) {
+      if (!look.robe) p(6, 13, 3, 2, near);
+      p(6, 15, 4, 1, shoes);
+    } else {
+      const [fx, bx] = frame === 1 ? [8, 5] : [7, 6];
+      if (!look.robe) {
+        p(bx, 13, 2, 2, far);
+        p(fx, 13, 2, 2, near);
+      }
+      p(bx - 1, 15, 3, 1, shoes);
+      p(fx, 15, 3, 1, shoes);
+    }
+    return;
+  }
+  // 正面、背面：frame 1 抬左脚，frame 2 抬右脚
+  const lift = (left: boolean) => (frame === 1 && left) || (frame === 2 && !left);
+  if (look.robe) {
+    p(5, 13, 6, 2, cloth);
+    p(10, 13, 1, 2, shade(cloth));
+    if (!lift(true)) p(5, 15, 2, 1, shoes);
+    if (!lift(false)) p(9, 15, 2, 1, shoes);
+    return;
+  }
+  for (const [x, left] of [
+    [5, true],
+    [9, false],
+  ] as [number, boolean][]) {
+    const color = left ? pants : shade(pants, 0.25);
+    if (lift(left)) {
+      p(x, 13, 2, 1, color);
+      p(x, 14, 2, 1, shoes);
+    } else {
+      p(x, 13, 2, 2, color);
+      p(x, 15, 2, 1, shoes);
+    }
+  }
+}
+
+function drawBody(p: Px, look: Look, view: View, frame: number) {
+  const cloth = look.cloth;
+  const dark = shade(cloth);
+  const arm = look.tattoo ? look.skin : cloth;
+  const armDark = look.tattoo ? shade(look.skin, 0.15) : dark;
+  if (view === 'side') {
+    p(6, 9, 4, 4, cloth);
+    p(6, 9, 1, 4, dark);
+    if (look.trim) p(9, 9, 1, 2, look.trim);
+    if (look.belt) p(6, 11, 4, 1, look.belt);
+    // 胳膊前后摆
+    if (frame === 0) {
+      p(7, 9, 2, 3, armDark);
+      p(8, 12, 1, 1, look.skin);
+    } else if (frame === 1) {
+      p(8, 9, 2, 2, armDark);
+      p(10, 10, 1, 1, look.skin);
+    } else {
+      p(6, 9, 2, 2, armDark);
+      p(5, 10, 1, 1, look.skin);
+    }
+    if (look.tattoo) p(8, 10, 1, 1, look.tattoo);
+    return;
+  }
+  p(5, 9, 6, 4, cloth);
+  p(10, 9, 1, 4, dark);
+  if (view === 'front' && look.trim) p(7, 9, 2, 2, look.trim);
+  if (look.belt) p(5, 11, 6, 1, look.belt);
+  // 两条胳膊，迈步时前后摆
+  const leftUp = frame === 1;
+  const rightUp = frame === 2;
+  p(4, 9, 1, leftUp ? 2 : 3, arm);
+  p(4, leftUp ? 11 : 12, 1, 1, look.skin);
+  p(11, 9, 1, rightUp ? 2 : 3, armDark);
+  p(11, rightUp ? 11 : 12, 1, 1, look.skin);
+  if (look.tattoo) {
+    p(4, 10, 1, 1, look.tattoo);
+    p(11, 9, 1, 1, look.tattoo);
+  }
+}
+
+function drawHead(p: Px, look: Look, view: View) {
+  const skin = look.skin;
+  const skinDark = shade(skin, 0.18);
+  for (const [y, x0, x1] of HEAD_ROWS) p(x0, y, x1 - x0 + 1, 1, skin);
+  if (view === 'front') {
+    p(11, 5, 1, 3, skinDark);
+    p(6, 5, 1, 2, EYE);
+    p(9, 5, 1, 2, EYE);
+    if (!look.beard) p(7, 7, 2, 1, mix(skin, '#a04040', 0.35));
+  } else if (view === 'side') {
+    p(8, 5, 1, 2, skinDark);
+    p(10, 5, 1, 2, EYE);
+    p(12, 6, 1, 1, skin);
+    if (!look.beard) p(11, 7, 1, 1, mix(skin, '#a04040', 0.35));
+  }
+}
+
+function drawBeard(p: Px, look: Look, view: View) {
+  const b = look.beard;
+  if (!b || view === 'back') return;
+  const style = look.beardStyle ?? 'full';
+  if (view === 'front') {
+    if (style === 'full') {
+      p(4, 6, 1, 1, b);
+      p(11, 6, 1, 1, b);
+      p(5, 7, 6, 2, b);
+      p(6, 9, 4, 1, b);
+    } else if (style === 'goatee') {
+      p(7, 8, 2, 2, b);
+    } else {
+      p(5, 8, 6, 1, shade(b, 0.1));
+    }
+  } else if (style === 'full') {
+    p(8, 7, 4, 1, b);
+    p(7, 8, 4, 1, b);
+    p(8, 9, 3, 1, b);
+  } else if (style === 'goatee') {
+    p(10, 8, 2, 2, b);
+  } else {
+    p(8, 8, 3, 1, shade(b, 0.1));
+  }
+}
+
+/** 通用的头发：前面露出脸，侧面盖住后脑勺，背面盖满。 */
+function hairCap(p: Px, color: string, view: View) {
+  p(6, 1, 4, 1, color);
+  p(5, 2, 6, 1, color);
+  p(4, 3, 8, 1, color);
+  if (view === 'front') {
+    p(4, 4, 1, 2, color);
+    p(11, 4, 1, 2, color);
+    p(5, 4, 1, 1, color);
+    p(10, 4, 1, 1, color);
+  } else if (view === 'side') {
+    p(4, 4, 4, 3, color);
+    p(4, 7, 3, 1, color);
+    p(5, 8, 2, 1, color);
+  } else {
+    for (const [y, x0, x1] of HEAD_ROWS) if (y >= 4) p(x0, y, x1 - x0 + 1, 1, color);
+    p(5, 6, 6, 2, shade(color, 0.2));
+  }
+}
+
+function drawHair(p: Px, look: Look, view: View) {
+  const h = look.hair;
+  const hat = look.hat ?? h;
+  const back = view === 'back';
+  const side = view === 'side';
+  switch (look.style) {
+    case 'topknot':
+      hairCap(p, h, view);
+      p(side ? 6 : 7, 0, 2, 1, h);
+      p(side ? 6 : 7, 1, 2, 1, look.hat ?? h);
+      if (!back) p(6, 2, 2, 1, tint(h, 0.2));
+      break;
+    case 'scholar':
+      hairCap(p, h, view);
+      p(6, 1, 4, 1, hat);
+      p(5, 2, 6, 1, hat);
+      p(4, 3, 8, 1, hat);
+      p(6, 2, 3, 1, tint(hat, 0.2));
+      if (back) {
+        p(6, 4, 1, 5, shade(hat));
+        p(9, 4, 1, 5, shade(hat));
+      } else if (side) {
+        p(4, 4, 2, 2, hat);
+        p(3, 4, 1, 4, shade(hat));
+      }
+      break;
+    case 'band':
+      hairCap(p, h, view);
+      p(6, 0, 1, 1, h);
+      p(9, 0, 1, 1, h);
+      p(4, 3, 8, 1, hat);
+      if (back) p(7, 4, 2, 2, hat);
+      else if (side) p(2, 3, 2, 2, hat);
+      else p(12, 3, 1, 2, hat);
+      break;
+    case 'straw':
+      if (back) hairCap(p, h, view);
+      p(6, 1, 4, 1, hat);
+      p(4, 2, 8, 1, hat);
+      p(1, 3, 14, 1, tint(hat, 0.15));
+      p(2, 4, 12, 1, shade(hat, 0.3));
+      p(6, 2, 2, 1, tint(hat, 0.35));
+      break;
+    case 'bald':
+      if (!back) p(6, 2, 2, 1, tint(look.skin, 0.5));
+      break;
+    case 'wild':
+      hairCap(p, h, view);
+      p(5, 0, 1, 1, h);
+      p(8, 0, 1, 1, h);
+      if (!side) p(10, 0, 1, 1, h);
+      p(3, 2, 1, 2, h);
+      if (!side) p(12, 2, 1, 2, h);
+      break;
+    case 'bun':
+      hairCap(p, h, view);
+      if (back) {
+        p(6, 2, 4, 3, shade(h, 0.1));
+        p(10, 2, 1, 1, GOLD);
+      } else if (side) {
+        p(3, 2, 2, 3, h);
+        p(2, 2, 1, 1, GOLD);
+      } else {
+        p(7, 0, 2, 1, h);
+        p(9, 1, 2, 1, GOLD);
+      }
+      break;
+    case 'fur':
+      if (back) hairCap(p, h, view);
+      p(6, 0, 4, 1, hat);
+      p(4, 1, 8, 1, hat);
+      p(3, 2, 10, 1, hat);
+      p(3, 3, 10, 1, tint(hat, 0.35));
+      p(5, 1, 1, 1, shade(hat));
+      p(9, 2, 1, 1, shade(hat));
+      break;
+    case 'long':
+      hairCap(p, h, view);
+      if (back) p(5, 8, 6, 3, h);
+      else if (side) p(4, 8, 2, 3, h);
+      else {
+        p(4, 6, 1, 5, h);
+        p(11, 6, 1, 5, h);
+        p(10, 1, 1, 1, hat);
+      }
+      break;
+    case 'cap':
+      hairCap(p, h, view);
+      p(6, 1, 4, 1, hat);
+      p(5, 2, 6, 1, hat);
+      p(4, 3, 8, 1, shade(hat));
+      break;
+  }
+}
+
+function drawWeapon(p: Px, look: Look, view: View) {
+  const w = look.weapon;
+  if (!w || w === 'none') return;
+  if (view === 'back' && (w === 'fan' || w === 'bow')) {
+    if (w === 'bow') {
+      p(7, 3, 1, 1, WOOD);
+      p(8, 4, 1, 5, WOOD);
+      p(7, 9, 1, 1, WOOD);
+    }
+    return;
+  }
+  const x = view === 'side' ? 11 : 12;
+  switch (w) {
+    case 'sword':
+      p(x, 6, 1, 5, STEEL);
+      p(x, 9, 1, 2, STEEL_DARK);
+      p(x - 1, 11, 3, 1, GOLD);
+      p(x, 12, 1, 1, WOOD_DARK);
+      break;
+    case 'spear':
+      p(x, 2, 1, 14, WOOD);
+      p(x, 0, 1, 2, STEEL);
+      p(x - 1, 2, 1, 1, '#d02020');
+      p(x + 1, 2, 1, 1, '#d02020');
+      break;
+    case 'fork':
+      p(x, 2, 1, 14, WOOD);
+      p(x - 1, 2, 3, 1, STEEL_DARK);
+      p(x - 1, 0, 1, 2, STEEL);
+      p(x, 0, 1, 2, STEEL);
+      p(x + 1, 0, 1, 2, STEEL);
+      break;
+    case 'staff':
+      p(x, 1, 1, 15, WOOD);
+      break;
+    case 'hoe':
+      p(x, 3, 1, 13, WOOD);
+      p(x - 1, 2, 3, 1, STEEL_DARK);
+      break;
+    case 'cane':
+      p(x - 1, 11, 1, 5, WOOD);
+      p(x - 2, 11, 1, 1, WOOD);
+      break;
+    case 'fan':
+      p(x, 8, 3, 3, '#f6f2e4');
+      p(x, 8, 1, 1, '#c8c0a8');
+      p(x, 11, 1, 1, WOOD);
+      break;
+    case 'axes':
+      p(x, 8, 1, 5, WOOD_DARK);
+      p(x + 1, 7, 2, 3, STEEL);
+      p(x + 2, 7, 1, 3, STEEL_DARK);
+      if (view === 'front') {
+        p(3, 8, 1, 5, WOOD_DARK);
+        p(1, 7, 2, 3, STEEL);
+        p(1, 7, 1, 3, STEEL_DARK);
+      }
+      break;
+    case 'bow':
+      p(x + 1, 4, 1, 1, WOOD);
+      p(x + 2, 5, 1, 5, WOOD);
+      p(x + 1, 10, 1, 1, WOOD);
+      p(x + 1, 5, 1, 5, '#e8e4d0');
+      break;
+  }
+}
+
 function paint(look: Look, facing: Facing, frame: number): HTMLCanvasElement {
   if (facing === 'left') return flipX(paint(look, 'right', frame));
+  const view: View = facing === 'up' ? 'back' : facing === 'right' ? 'side' : 'front';
   const c = makeCanvas(16, 16);
   const ctx = ctx2d(c);
   const p: Px = (x, y, w, h, color) => {
     ctx.fillStyle = color;
     ctx.fillRect(x, y, w, h);
   };
-  const back = facing === 'up';
-  const shoes = look.shoes ?? '#2a1a10';
-  const pants = look.pants ?? '#3a2a1a';
-  const stride = frame === 1 ? 1 : 0;
-
-  // 腿和脚
-  if (look.robe) {
-    p(4, 12, 8, 3, look.cloth);
-    p(5 - stride, 15, 2, 1, shoes);
-    p(9 + stride, 15, 2, 1, shoes);
-  } else {
-    p(5 - stride, 13, 2, 2, pants);
-    p(9 + stride, 13, 2, 2, pants);
-    p(5 - stride, 15, 2, 1, shoes);
-    p(9 + stride, 15, 2, 1, shoes);
-  }
-  // 身体和胳膊
-  p(4, 8, 8, 5, look.cloth);
-  if (look.trim && !back) p(7, 8, 2, 4, look.trim);
-  if (look.belt) p(4, 11, 8, 1, look.belt);
-  const arm = look.tattoo ? look.skin : look.cloth;
-  p(3, 9, 1, 3, arm);
-  p(12, 9, 1, 3, arm);
-  if (look.tattoo) {
-    p(3, 10, 1, 1, look.tattoo);
-    p(12, 9, 1, 1, look.tattoo);
-    p(12, 11, 1, 1, look.tattoo);
-  }
-  p(3, 12, 1, 1, look.skin);
-  p(12, 12, 1, 1, look.skin);
-  // 头
-  p(5, 3, 6, 5, look.skin);
-  p(4, 4, 1, 2, look.skin);
-  p(11, 4, 1, 2, look.skin);
-  if (back) {
-    p(5, 2, 6, 6, look.style === 'bald' ? look.skin : look.hair);
-  } else {
-    const ex = facing === 'right' ? 1 : 0;
-    p(6 + ex, 5, 1, 1, EYE);
-    p(9 + ex, 5, 1, 1, EYE);
-    if (look.beard) {
-      p(6 + ex, 7, 4, 2, look.beard);
-      p(5, 6, 1, 2, look.beard);
-      p(10, 6, 1, 2, look.beard);
-    } else {
-      p(7 + ex, 7, 2, 1, mix(look.skin, '#a04040', 0.35));
-    }
-  }
-  drawHair(p, look, back);
-  drawWeapon(p, look.weapon);
+  // 背面时武器在身后，先画
+  if (view === 'back') drawWeapon(p, look, view);
+  drawLegs(p, look, view, frame);
+  drawBody(p, look, view, frame);
+  drawHead(p, look, view);
+  drawBeard(p, look, view);
+  drawHair(p, look, view);
+  if (view !== 'back') drawWeapon(p, look, view);
   return outline(c);
 }
 
@@ -244,6 +409,7 @@ function cached(look: Look, key: string, make: () => HTMLCanvasElement) {
   return c;
 }
 
+/** frame：0 站立，1、2 两个迈步动作。 */
 export function charSprite(look: Look, facing: Facing = 'down', frame = 0) {
   return cached(look, `${facing}${frame}`, () => paint(look, facing, frame));
 }

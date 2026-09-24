@@ -205,7 +205,7 @@ class Dialogue implements Modal {
     private readonly fixed: boolean,
     private readonly resolve: () => void,
   ) {
-    this.lines = wrapText(ctx, text, VW - 8 - (portrait ? 64 : 24));
+    this.lines = wrapText(ctx, text, VW - 8 - (portrait ? 72 : 24));
     if (fixed) this.shown = Infinity;
   }
 
@@ -243,9 +243,9 @@ class Dialogue implements Modal {
     let tx = x + 11;
     if (this.portrait) {
       ctx.fillStyle = '#1a2250';
-      ctx.fillRect(x + 8, y + 9, 40, 40);
-      ctx.drawImage(this.portrait, 0, 0, 16, 16, x + 12, y + 13, 32, 32);
-      tx = x + 56;
+      ctx.fillRect(x + 6, y + 5, 48, 48);
+      ctx.drawImage(this.portrait, x + 6, y + 5);
+      tx = x + 62;
     }
     if (this.speaker) {
       const w = textWidth(ctx, this.speaker) + 16;

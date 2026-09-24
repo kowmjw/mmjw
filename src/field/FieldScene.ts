@@ -1,4 +1,5 @@
 import { charSprite, type Facing } from '../art/characters';
+import { portrait as portraitOf } from '../art/portraits';
 import { TILE, renderMap } from '../art/tiles';
 import { BattleScene } from '../battle/BattleScene';
 import { BATTLES } from '../data/battles';
@@ -50,7 +51,7 @@ export class FieldScene implements Scene {
   private tiles!: TileKind[][];
   private mapCanvas!: HTMLCanvasElement;
   private npcs: Npc[] = [];
-  private readonly player = { x: 0, y: 0, dir: 'down' as Facing, fromX: 0, fromY: 0, t: 1, walking: false, anim: 0 };
+  private readonly player = { x: 0, y: 0, dir: 'down' as Facing, fromX: 0, fromY: 0, t: 1, walking: false, anim: 0, steps: 0 };
   private route: Pt[] = [];
   private routeGoal: Pt | null = null;
   private readonly ui: UiLayer;
@@ -66,7 +67,7 @@ export class FieldScene implements Scene {
     this.ui = new UiLayer(game.screen.ctx);
     const portrait = (who: string) => {
       const s = SPEAKERS[who];
-      return s ? charSprite(lookOf(s.look)) : null;
+      return s ? portraitOf(lookOf(s.look)) : null;
     };
     this.api = {
       state,
@@ -193,6 +194,7 @@ export class FieldScene implements Scene {
     p.y = ny;
     p.t = 0;
     p.walking = true;
+    p.steps++;
     return true;
   }
 
@@ -403,11 +405,11 @@ export class FieldScene implements Scene {
     const h = VH - 32;
     drawWindow(ctx, x, y, w, h, 0.96);
     ctx.fillStyle = '#1a2250';
-    ctx.fillRect(x + 12, y + 12, 36, 36);
-    ctx.drawImage(charSprite(c.look), 0, 0, 16, 16, x + 14, y + 14, 32, 32);
-    drawText(ctx, c.name, x + 58, y + 12, { size: 14, bold: true, color: '#ffe070' });
-    if (c.title) drawText(ctx, c.title, x + 58 + c.name.length * 15 + 8, y + 14, { size: 11, color: '#c8d0ff' });
-    drawText(ctx, `${cls.name}　Lv ${m.level}　经验 ${m.exp}/100`, x + 58, y + 32);
+    ctx.fillRect(x + 10, y + 8, 48, 48);
+    ctx.drawImage(portraitOf(c.look), x + 10, y + 8);
+    drawText(ctx, c.name, x + 68, y + 12, { size: 14, bold: true, color: '#ffe070' });
+    if (c.title) drawText(ctx, c.title, x + 68 + c.name.length * 15 + 8, y + 14, { size: 11, color: '#c8d0ff' });
+    drawText(ctx, `${cls.name}　Lv ${m.level}　经验 ${m.exp}/100`, x + 68, y + 32);
     const stat = (label: string, v: number, extra: number | undefined, sx: number, sy: number) => {
       drawText(ctx, label, sx, sy, { color: '#9fb4ff' });
       drawText(ctx, String(v + (extra ?? 0)), sx + 34, sy, { color: extra ? '#80ff90' : '#fff' });
@@ -578,7 +580,8 @@ export class FieldScene implements Scene {
     const pp = this.playerPixel();
     const leader = this.state.party[0];
     const p = this.player;
-    const frame = p.walking ? (Math.floor(p.t * 2) % 2 === 0 ? 1 : 0) : 0;
+    // 每走一步左右脚交替迈出
+    const frame = p.walking && p.t < 0.6 ? (p.steps % 2 ? 1 : 2) : 0;
     const actors = [
       ...this.npcs.map((n) => ({ y: n.y * TILE, x: n.x * TILE, img: charSprite(lookOf(n.look), n.dir, 0) })),
       { y: pp.y, x: pp.x, img: charSprite(lookOf(leader.id), p.dir, frame) },
