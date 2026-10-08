@@ -13,6 +13,7 @@
   },
   "devDependencies": {
     "@fontsource/ma-shan-zheng": "^5.3.1",
+    "@fontsource/unifont": "^5.3.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.0",
     "vite-plugin-singlefile": "^2.3.3",
